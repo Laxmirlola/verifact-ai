@@ -28,7 +28,7 @@ class Settings:
     
     # Server
     HOST = os.getenv("HOST", "0.0.0.0")
-    PORT = int(os.getenv("PORT", 8080))
+    PORT = int(os.getenv("PORT", 10000))
     
     # Retrieval Config
     TOP_K_RESULTS = 5
