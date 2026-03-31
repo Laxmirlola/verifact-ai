@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.env
+*.log
+app/data/faiss_index/
+*.faiss
+.DS_Store
+node_modules/

@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+venv/
+.env
+*.log
+
+# Large data files (too big for GitHub — 300+ MB each)
+backend/app/data/*.csv
+backend/app/data/news_articles.json
+backend/app/data/faiss_index/
+backend/app/data/analytics.db
+backend/app/data/dataset_stats_cache.json
+
+# ML model cache (regenerated automatically on startup)
+backend/app/data/ml_model.pkl
+backend/app/data/ml_vectorizer.pkl
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/frontend-dev.log
+frontend/frontend-err.log
+
+# Backend logs
+backend/backend-err.log
+backend/backend-out.log
+
+# Misc
+.DS_Store
+analytics_dump.txt
+*.faiss
+backend/*.log
+
