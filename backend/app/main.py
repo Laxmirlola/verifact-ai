@@ -35,6 +35,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Fake News Verification API")
+startup_state = {
+    "status": "starting",
+    "details": "Booting application",
+    "error": None,
+}
 
 # CORS middleware - allow all origins for development
 app.add_middleware(
@@ -45,12 +50,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize services on startup"""
+def _initialize_services():
+    startup_state["status"] = "initializing"
+    startup_state["details"] = "Loading datasets and models"
+    startup_state["error"] = None
+
     logger.info("Starting Fake News Verification System...")
-    
-    # Try to load existing index first
+
     if retrieval_service.load_index():
         logger.info(f"Loaded existing index with {len(retrieval_service.articles)} articles")
         # Index exists — still load the WELFake DataFrame for analytics/stats
@@ -82,11 +88,32 @@ async def startup_event():
         logger.warning("ML classifier not available - using LLM-only verification")
 
 
+    startup_state["status"] = "ready"
+    startup_state["details"] = "All services initialized"
+
+
+async def _run_startup_initialization():
+    try:
+        await asyncio.to_thread(_initialize_services)
+    except Exception as exc:
+        logger.exception("Background initialization failed")
+        startup_state["status"] = "error"
+        startup_state["details"] = "Initialization failed"
+        startup_state["error"] = str(exc)
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Start the web server immediately, then warm heavyweight services in the background."""
+    asyncio.create_task(_run_startup_initialization())
+
+
 @app.get("/")
 async def root():
     return {
         "message": "Fake News Verification API",
         "version": "2.0.0",
+        "startup": startup_state,
         "features": {
             "semantic_search": retrieval_service.index is not None,
             "ml_classifier": ml_classifier.is_trained,
@@ -102,7 +129,8 @@ async def root():
 async def health_check():
     stats = welfake_service.get_stats()
     return {
-        "status": "healthy",
+        "status": "healthy" if startup_state["status"] != "error" else "degraded",
+        "startup": startup_state,
         "index_loaded": retrieval_service.index is not None,
         "articles_count": len(retrieval_service.articles),
         "ml_classifier": {
@@ -162,7 +190,7 @@ async def verify_news(request: VerificationRequest):
             if evidence:
                 explanation += f" Found {len(evidence)} related articles for reference."
 
-        elif evidence:
+        else:
             # Use LLM for lower confidence or when ML unavailable
             verification_result = await asyncio.to_thread(
                 llm_service.verify, request.headline, evidence
@@ -190,17 +218,6 @@ async def verify_news(request: VerificationRequest):
                 if ml_agrees:
                     confidence = min(1.0, confidence + 0.1)
                     explanation += f" (ML classifier agrees with {ml_result['confidence']:.0%} confidence)"
-
-        else:
-            # No evidence and low ML confidence
-            if ml_result['ml_available']:
-                credibility = CredibilityLabel.TRUE if ml_result['prediction'] == "True" else CredibilityLabel.FAKE
-                confidence  = ml_result['confidence'] * 0.8
-                explanation = f"Based on ML analysis only (no evidence found). Classification: {ml_result['prediction']}"
-            else:
-                credibility = CredibilityLabel.UNVERIFIED
-                confidence  = 0.0
-                explanation = "Unable to verify: no evidence found and ML classifier unavailable."
 
         score_breakdown = {
             "ml_score":       ml_score,

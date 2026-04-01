@@ -2,17 +2,20 @@ from groq import Groq
 from typing import List
 import json
 import re
+import logging
 from app.config import settings
 from app.models import RetrievedEvidence, CredibilityLabel
+
+logger = logging.getLogger(__name__)
 
 
 class LLMService:
     def __init__(self):
-        if not settings.GROQ_API_KEY:
-            raise ValueError("GROQ_API_KEY is not set in .env file")
-        
-        self.client = Groq(api_key=settings.GROQ_API_KEY)
+        self.client = Groq(api_key=settings.GROQ_API_KEY) if settings.GROQ_API_KEY else None
         self.model = settings.GROQ_MODEL  # defaults to llama-3.3-70b-versatile
+
+    def is_available(self) -> bool:
+        return self.client is not None
     
     def create_verification_prompt(self, headline: str, evidence: List[RetrievedEvidence]) -> str:
         """Create RAG prompt for fact verification"""
@@ -50,6 +53,14 @@ Provide your response:"""
     
     def verify(self, headline: str, evidence: List[RetrievedEvidence]) -> dict:
         """Main verification method using Groq"""
+        if not self.client:
+            logger.warning("LLM verification requested without GROQ_API_KEY configured")
+            return {
+                "credibility": "Unverified",
+                "explanation": "LLM verification is unavailable because GROQ_API_KEY is not configured.",
+                "confidence": 0.0
+            }
+
         prompt = self.create_verification_prompt(headline, evidence)
         
         try:
@@ -67,7 +78,7 @@ Provide your response:"""
             )
             return self._parse_response(response.choices[0].message.content)
         except Exception as e:
-            print(f"Groq API error: {e}")
+            logger.error(f"Groq API error: {e}")
             return {
                 "credibility": "Unverified",
                 "explanation": f"Error during verification: {str(e)}",
