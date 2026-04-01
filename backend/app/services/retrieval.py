@@ -11,7 +11,6 @@ class RetrievalService:
     def __init__(self):
         self.index = None
         self.articles = []
-        self.dimension = embedding_service.get_embedding_dimension()
         
     def build_index(self, articles: List[NewsArticle]):
         """Build FAISS index from news articles"""
@@ -22,7 +21,9 @@ class RetrievalService:
         embeddings = embedding_service.generate_embeddings_batch(texts)
         
         # Create FAISS index
-        self.index = faiss.IndexFlatL2(self.dimension)
+        dimension = embedding_service.get_embedding_dimension()
+        self.index = faiss.IndexFlatL2(dimension)
+
         self.index.add(embeddings.astype('float32'))
         
         # Save index
