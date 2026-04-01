@@ -22,26 +22,50 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Try to import NLTK components
-try:
-    import nltk
-    from nltk.corpus import stopwords
-    from nltk.stem.porter import PorterStemmer
+# Global state for NLTK
+_nltk_initialized = False
+_STOPWORDS = set()
+_STEMMER = None
+_NLTK_AVAILABLE = False
+
+def _init_nltk():
+    global _nltk_initialized, _STOPWORDS, _STEMMER, _NLTK_AVAILABLE
+    if _nltk_initialized:
+        return
     
-    # Download stopwords if not available
     try:
-        nltk.data.find('corpora/stopwords')
-    except LookupError:
-        nltk.download('stopwords', quiet=True)
-    
-    STOPWORDS = set(stopwords.words('english'))
-    STEMMER = PorterStemmer()
-    NLTK_AVAILABLE = True
-except ImportError:
-    logger.warning("NLTK not available, using basic preprocessing")
-    NLTK_AVAILABLE = False
-    STOPWORDS = set()
-    STEMMER = None
+        import nltk
+        from nltk.corpus import stopwords
+        from nltk.stem.porter import PorterStemmer
+        
+        try:
+            nltk.data.find('corpora/stopwords')
+        except LookupError:
+            nltk.download('stopwords', quiet=True)
+        
+        _STOPWORDS = set(stopwords.words('english'))
+        _STEMMER = PorterStemmer()
+        _NLTK_AVAILABLE = True
+    except ImportError:
+        logger.warning("NLTK not available, using basic preprocessing")
+        _NLTK_AVAILABLE = False
+        _STOPWORDS = {
+            'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been',
+            'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will',
+            'would', 'could', 'should', 'may', 'might', 'must', 'shall',
+            'can', 'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by',
+            'from', 'as', 'into', 'through', 'during', 'before', 'after',
+            'above', 'below', 'between', 'under', 'again', 'further',
+            'then', 'once', 'here', 'there', 'when', 'where', 'why',
+            'how', 'all', 'each', 'few', 'more', 'most', 'other', 'some',
+            'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so',
+            'than', 'too', 'very', 'just', 'and', 'but', 'if', 'or',
+            'because', 'until', 'while', 'this', 'that', 'these', 'those'
+        }
+        _STEMMER = None
+        
+    _nltk_initialized = True
+
 
 
 class MLClassifier:
@@ -59,28 +83,19 @@ class MLClassifier:
     
     def preprocess_text(self, text: str) -> str:
         """Preprocess text using stemming and stopword removal"""
+        _init_nltk()
+        
         # Remove non-alphabetic characters
         text = re.sub('[^a-zA-Z]', ' ', text)
         text = text.lower()
         words = text.split()
         
-        if NLTK_AVAILABLE and STEMMER:
+        if _NLTK_AVAILABLE and _STEMMER:
             # Apply stemming and remove stopwords
-            words = [STEMMER.stem(word) for word in words if word not in STOPWORDS]
+            words = [_STEMMER.stem(word) for word in words if word not in _STOPWORDS]
         else:
-            # Basic preprocessing without NLTK
-            basic_stopwords = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 
-                              'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will',
-                              'would', 'could', 'should', 'may', 'might', 'must', 'shall',
-                              'can', 'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by',
-                              'from', 'as', 'into', 'through', 'during', 'before', 'after',
-                              'above', 'below', 'between', 'under', 'again', 'further',
-                              'then', 'once', 'here', 'there', 'when', 'where', 'why',
-                              'how', 'all', 'each', 'few', 'more', 'most', 'other', 'some',
-                              'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so',
-                              'than', 'too', 'very', 'just', 'and', 'but', 'if', 'or',
-                              'because', 'until', 'while', 'this', 'that', 'these', 'those'}
-            words = [word for word in words if word not in basic_stopwords]
+            # Basic preprocessing without NLTK or with fallback rules
+            words = [word for word in words if word not in _STOPWORDS]
         
         return ' '.join(words)
     
